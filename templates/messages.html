@@ -1,0 +1,122 @@
+{% extends "index.html" %}
+
+{% block title %}Kiss or Slap - Messages{% endblock %}
+{% block page_class %}page-messages{% endblock %}
+
+{% block content %}
+  <div class="chat-sidebar">
+    <div class="chat-sidebar-header">
+      <h2>Messages</h2>
+      <div class="matches-section">
+        <div class="section-label">New Matches</div>
+        <div class="matches-row">
+          {% for match in matches|default([
+            {'name': 'Clara', 'image': 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=200'},
+            {'name': 'Emma', 'image': 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=200'},
+            {'name': 'Julien', 'image': 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200'}
+          ]) %}
+            <div class="match-avatar-wrapper">
+              <a href="{{ url_for('profile', user_id=match.user_id) }}" class="match-profile-link">
+                <img src="{{ media_url(match.image) }}" class="match-avatar" alt="{{ match.name }}">
+                <div class="match-name">{{ match.name }}</div>
+              </a>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="conversations-list">
+      {% for conversation in conversations|default([
+        {'name': 'Sophie', 'image': 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200', 'time': '14:32', 'message': 'Hey! Liked your photo in Paris', 'unread': 2, 'online': true},
+        {'name': 'Lucas', 'image': 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200', 'time': 'Yesterday', 'message': 'You owe me a kiss for that slap!', 'unread': 0, 'online': false}
+      ]) %}
+        <div class="conv-item{% if selected_conversation and selected_conversation.id == conversation.id %} active{% endif %}" onclick="window.location.href='{{ url_for('messages', conversation_id=conversation.id) }}'">
+          <div class="conv-avatar-wrapper">
+            <img src="{{ media_url(conversation.image) }}" class="conv-avatar" alt="{{ conversation.name }}">
+            {% if conversation.online %}<div class="online-indicator"></div>{% endif %}
+          </div>
+          <div class="conv-details">
+            <div class="conv-top-row">
+              <span class="conv-name">{{ conversation.name }}</span>
+              <span class="conv-time">{{ conversation.time }}</span>
+            </div>
+            <div class="conv-last-msg">{{ conversation.message }}</div>
+          </div>
+          {% if conversation.unread %}<span class="unread-badge">{{ conversation.unread }}</span>{% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+<div class="chat-area{% if selected_conversation %} active{% endif %}" id="chat-window">
+    {% if selected_conversation %}
+      <div class="chat-header">
+        <div class="chat-header-user">
+          <button class="btn-back-list" type="button" onclick="closeChat()"><i class="fa-solid fa-arrow-left"></i></button>
+          <img src="{{ media_url(selected_conversation.image) }}" id="chat-user-img" alt="User">
+          <div>
+            <h3 id="chat-user-name">{{ selected_conversation.name }}</h3>
+            <p id="chat-user-status">Bucket {{ selected_conversation.bucket }}{% if selected_conversation.online %} - Online{% endif %}</p>
+          </div>
+        </div>
+        <i class="fa-solid fa-ellipsis-vertical chat-menu-icon"></i>
+      </div>
+
+      <div class="messages-container" id="messages-box">
+        {% for message in chat_messages|default([]) %}
+          <div class="msg-bubble{% if message.sender_id == current_user_id %} sent{% else %} received{% endif %}">
+            {{ message.body }}
+            <div class="msg-time">{{ message.sent_at }}</div>
+          </div>
+        {% else %}
+          <p class="empty-state">No messages yet.</p>
+        {% endfor %}
+      </div>
+
+      <form class="chat-input-bar" method="post" action="{{ url_for('send_message', conversation_id=selected_conversation.id) }}">
+        <input type="text" name="body" placeholder="Type a message..." required>
+        <button class="btn-send" type="submit"><i class="fa-solid fa-paper-plane"></i></button>
+      </form>
+    {% else %}
+      <div class="no-chat-selected" style="display: flex; align-items: center; justify-content: center; height: 100%; color: #888;">
+        <p>Select a conversation to start a chat.</p>
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function openChat(name, avatar) {
+    document.getElementById('chat-user-name').textContent = name;
+    document.getElementById('chat-user-img').src = avatar;
+    document.getElementById('chat-window').classList.add('active');
+  }
+
+  function closeChat() {
+    document.getElementById('chat-window').classList.remove('active');
+  }
+
+  function sendMessage() {
+    const input = document.getElementById('message-input');
+    const text = input.value.trim();
+    if (!text) return;
+
+    const bubble = document.createElement('div');
+    bubble.className = 'msg-bubble sent';
+    bubble.textContent = text;
+    const time = document.createElement('div');
+    time.className = 'msg-time';
+    time.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    bubble.appendChild(time);
+    document.getElementById('messages-box').appendChild(bubble);
+    input.value = '';
+    document.getElementById('messages-box').scrollTop = document.getElementById('messages-box').scrollHeight;
+  }
+
+  function handleKeyPress(event) {
+    if (event.key === 'Enter') sendMessage();
+  }
+</script>
+{% endblock %}

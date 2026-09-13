@@ -1,0 +1,141 @@
+{% extends "index.html" %}
+
+{% block title %}Admin Dashboard - Filtered Users{% endblock %}
+{% block page_class %}page-admin{% endblock %}
+
+{% block content %}
+<div class="content-wrapper" style="max-width: 98%; margin: 0 auto; padding: 20px;">
+  <div class="dashboard-card" style="margin-bottom: 20px;">
+    <h2><i class="fa-solid fa-user-shield"></i> Administration - Users Database</h2>
+    <p style="color: #aaa; margin-bottom: 0;">Total users found: <strong>{{ total_results }}</strong></p>
+  </div>
+
+  <!-- Filter Panel -->
+  <form method="GET" action="{{ url_for('admin_panel') }}" style="background: #1e1e24; padding: 20px; border-radius: 10px; margin-bottom: 25px; border: 1px solid #2d2d3a;">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 15px;">
+      
+      <!-- Text Search -->
+      <div>
+        <label style="color: #ccc; font-size: 12px; display: block; margin-bottom: 5px;">Search (Name, Email, Location, Handle)</label>
+        <input type="text" name="search" value="{{ search_query }}" placeholder="e.g., Eden, Paris, @user..." style="width: 100%; padding: 8px 12px; background: #2a2a32; border: 1px solid #3f3f4e; color: #fff; border-radius: 6px;">
+      </div>
+
+      <!-- Gender Filter -->
+      <div>
+        <label style="color: #ccc; font-size: 12px; display: block; margin-bottom: 5px;">Gender</label>
+        <select name="sex" style="width: 100%; padding: 8px 12px; background: #2a2a32; border: 1px solid #3f3f4e; color: #fff; border-radius: 6px;">
+          <option value="">All</option>
+          <option value="M" {% if sex_filter == 'M' %}selected{% endif %}>Male (M)</option>
+          <option value="F" {% if sex_filter == 'F' %}selected{% endif %}>Female (F)</option>
+        </select>
+      </div>
+
+      <!-- Bucket Filter -->
+      <div>
+        <label style="color: #ccc; font-size: 12px; display: block; margin-bottom: 5px;">Bucket</label>
+        <select name="bucket" style="width: 100%; padding: 8px 12px; background: #2a2a32; border: 1px solid #3f3f4e; color: #fff; border-radius: 6px;">
+          <option value="">All Buckets</option>
+          {% for b in range(1, 6) %}
+            <option value="{{ b }}" {% if bucket_filter == b|string %}selected{% endif %}>Bucket {{ b }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Sorting -->
+      <div>
+        <label style="color: #ccc; font-size: 12px; display: block; margin-bottom: 5px;">Sort by</label>
+        <select name="sort_by" style="width: 100%; padding: 8px 12px; background: #2a2a32; border: 1px solid #3f3f4e; color: #fff; border-radius: 6px;">
+          <option value="id" {% if sort_by == 'id' %}selected{% endif %}>ID</option>
+          <option value="name" {% if sort_by == 'name' %}selected{% endif %}>Name</option>
+          <option value="elo" {% if sort_by == 'elo' %}selected{% endif %}>Elo Score</option>
+          <option value="love" {% if sort_by == 'love' %}selected{% endif %}>Love Potions</option>
+          <option value="dark" {% if sort_by == 'dark' %}selected{% endif %}>Dark Elixir</option>
+          <option value="kisses" {% if sort_by == 'kisses' %}selected{% endif %}>Kisses</option>
+          <option value="slaps" {% if sort_by == 'slaps' %}selected{% endif %}>Slaps</option>
+        </select>
+      </div>
+
+      <!-- Order -->
+      <div>
+        <label style="color: #ccc; font-size: 12px; display: block; margin-bottom: 5px;">Order</label>
+        <select name="order" style="width: 100%; padding: 8px 12px; background: #2a2a32; border: 1px solid #3f3f4e; color: #fff; border-radius: 6px;">
+          <option value="ASC" {% if order == 'ASC' %}selected{% endif %}>Ascending (ASC)</option>
+          <option value="DESC" {% if order == 'DESC' %}selected{% endif %}>Descending (DESC)</option>
+        </select>
+      </div>
+
+    </div>
+
+    <!-- Numerical Range Filters -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 20px;">
+      <div>
+        <label style="color: #ccc; font-size: 12px; display: block; margin-bottom: 5px;">Elo Min / Max</label>
+        <div style="display: flex; gap: 5px;">
+          <input type="number" name="min_elo" value="{{ min_elo }}" placeholder="Min" style="width: 50%; padding: 6px; background: #2a2a32; border: 1px solid #3f3f4e; color: #fff; border-radius: 6px;">
+          <input type="number" name="max_elo" value="{{ max_elo }}" placeholder="Max" style="width: 50%; padding: 6px; background: #2a2a32; border: 1px solid #3f3f4e; color: #fff; border-radius: 6px;">
+        </div>
+      </div>
+
+      <div>
+        <label style="color: #ccc; font-size: 12px; display: block; margin-bottom: 5px;">Love Potion Min / Max</label>
+        <div style="display: flex; gap: 5px;">
+          <input type="number" name="min_love" value="{{ min_love }}" placeholder="Min" style="width: 50%; padding: 6px; background: #2a2a32; border: 1px solid #3f3f4e; color: #fff; border-radius: 6px;">
+          <input type="number" name="max_love" value="{{ max_love }}" placeholder="Max" style="width: 50%; padding: 6px; background: #2a2a32; border: 1px solid #3f3f4e; color: #fff; border-radius: 6px;">
+        </div>
+      </div>
+
+      <div>
+        <label style="color: #ccc; font-size: 12px; display: block; margin-bottom: 5px;">Dark Elixir Min / Max</label>
+        <div style="display: flex; gap: 5px;">
+          <input type="number" name="min_dark" value="{{ min_dark }}" placeholder="Min" style="width: 50%; padding: 6px; background: #2a2a32; border: 1px solid #3f3f4e; color: #fff; border-radius: 6px;">
+          <input type="number" name="max_dark" value="{{ max_dark }}" placeholder="Max" style="width: 50%; padding: 6px; background: #2a2a32; border: 1px solid #3f3f4e; color: #fff; border-radius: 6px;">
+        </div>
+      </div>
+    </div>
+
+    <!-- Form Actions -->
+    <div style="display: flex; gap: 10px; justify-content: flex-end;">
+      <a href="{{ url_for('admin_panel') }}" style="padding: 8px 16px; background: #4a4a5a; color: white; text-decoration: none; border-radius: 6px; font-size: 14px;">Reset</a>
+      <button type="submit" style="padding: 8px 20px; background: #ff4757; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 14px;">
+        <i class="fa-solid fa-filter"></i> Apply Filters
+      </button>
+    </div>
+  </form>
+
+  <!-- Full Dynamic Table -->
+  <div style="overflow-x: auto; background: #1e1e24; border-radius: 10px; padding: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
+    <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; color: #fff;">
+      <thead>
+        <tr style="background-color: #2a2a32; border-bottom: 2px solid #3f3f4e;">
+          {% for col in columns %}
+            <th style="padding: 12px 15px; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; color: #ff4757;">
+              {{ col }}
+            </th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for user in users %}
+          <tr style="border-bottom: 1px solid #2d2d3a; transition: background 0.2s;" onmouseover="this.style.background='#252530'" onmouseout="this.style.background='transparent'">
+            {% for col in columns %}
+              <td style="padding: 10px 15px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                {% if col in ['image_url', 'profile_image', 'avatar'] and user[col] %}
+                  <img src="{{ media_url(user[col]) if media_url is defined else user[col] }}" alt="avatar" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover;">
+                {% else %}
+                  {{ user[col] if user[col] is not none else '-' }}
+                {% endif %}
+              </td>
+            {% endfor %}
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="{{ columns|length if columns else 1 }}" style="text-align: center; padding: 25px; color: #888;">
+              No users found matching your search criteria.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

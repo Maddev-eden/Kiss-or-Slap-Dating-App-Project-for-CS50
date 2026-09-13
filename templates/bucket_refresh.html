@@ -1,0 +1,23 @@
+<!-- Template d'actualisation automatique des Buckets -->
+<script>
+  (function() {
+    /**
+     * Exécute la mise à jour des buckets (NTILE) en arrière-plan
+     */
+    async function refreshBuckets() {
+      try {
+        await fetch("{{ url_for('bucket') }}", { method: 'GET' });
+      } catch (error) {
+        console.error("Erreur lors du recalcul des buckets :", error);
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      // Exécution initiale au chargement de la page
+      refreshBuckets();
+
+      // Recalcule le classement relatif régulièrement (ex: toutes les 30 secondes)
+      setInterval(refreshBuckets, 30000);
+    });
+  })();
+</script>

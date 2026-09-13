@@ -1,0 +1,51 @@
+{% extends "index.html" %}
+
+{% block title %}Kiss or Slap - Account{% endblock %}
+{% block page_class %}page-account{% endblock %}
+
+{% block content %}
+  <div class="content-wrapper">
+    <header class="page-header">
+      <h2>Account</h2>
+      <p>Manage your profile and account preferences.</p>
+    </header>
+
+    <div class="account-layout">
+      <section class="account-card">
+        <img class="account-avatar" src="{{ media_url(profile_image) }}" alt="{{ profile_name|default('Alex Morgan') }} profile">
+        <h3>{{ profile_name|default('Alex Morgan') }}</h3>
+        <p class="account-handle">{{ profile_handle|default('@alexmorgan') }}</p>
+        <div class="stats-list">
+          <div><span class="stat-value">{{ kisses|default(128) }}</span><span class="stat-label">Kisses</span></div>
+          <div><span class="stat-value">{{ slaps|default(42) }}</span><span class="stat-label">Slaps</span></div>
+          <div><span class="stat-value">{{ score|default('76%') }}</span><span class="stat-label">Score</span></div>
+          <div><span class="stat-value">{{ bucket|default('unclassed') }}</span><span class="stat-label">Bucket</span></div>
+        </div>
+      </section>
+
+      <section class="settings-card">
+        <h3>Account settings</h3>
+
+        <div class="settings-list">
+          {% for setting in settings %}
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 15px 0; border-bottom: 1px solid #2a2a32;">
+              <div>
+                <h4 style="margin: 0; color: #fff; font-size: 16px;">{{ setting.title }}</h4>
+                <p style="margin: 4px 0 0 0; color: #888; font-size: 13px;">{{ setting.description }}</p>
+              </div>
+              <a href="{{ setting.target_url }}" 
+                 style="background: #2a2a32; color: #fff; padding: 8px 16px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 13px;">
+                {{ setting.action }}
+              </a>
+            </div>
+          {% endfor %}
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-copy"><strong>Sign out</strong><span>End your current session.</span></div>
+          <a class="setting-action" href="{{ logout_url }}">Log out</a>
+        </div>
+      </section>
+    </div>
+  </div>
+{% endblock %}

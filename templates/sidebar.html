@@ -1,0 +1,39 @@
+{% set navigation = nav_items|default([
+  {'key': 'home', 'label': 'Home', 'href': url_for('home'), 'icon': 'fa-house'},
+  {'key': 'top', 'label': 'Top', 'href': url_for('top'), 'icon': 'fa-trophy'},
+  {'key': 'boost', 'label': 'Boost', 'href': url_for('boost'), 'icon': 'fa-bolt'},
+  {'key': 'messages', 'label': 'Messages', 'href': url_for('messages'), 'icon': 'fa-comment-dots'},
+  {'key': 'account', 'label': 'Account', 'href': url_for('account'), 'icon': 'fa-user'}
+]) %}
+{% set logo_path = logo_url|default(url_for('static', filename='logo.png')) %}
+
+<div class="mobile-header">
+  <img src="{{ logo_path }}" alt="Kiss or Slap Logo">
+  <h1>Kiss/Slap</h1>
+</div>
+
+<nav class="app-nav">
+  <div class="brand-logo">
+    <img src="{{ logo_path }}" alt="Kiss or Slap Logo">
+    <h1>Kiss/Slap</h1>
+  </div>
+
+  <ul class="nav-links">
+    {% for item in navigation %}
+      <li class="nav-item{% if active_page|default('') == item.key %} active{% endif %}">
+        <a href="{{ item.href }}">
+          <i class="fa-solid {{ item.icon }}"></i>
+          <span>{{ item.label }}</span>
+        </a>
+      </li>
+    {% endfor %}
+    <li class="nav-item logout-link">
+      <a href="{{ logout_url|default('/logout') }}">
+        <i class="fa-solid fa-right-from-bracket"></i>
+        <span>Logout</span>
+      </a>
+    </li>
+  </ul>
+
+  <div class="sidebar-footer">&copy; 2026 Kiss/Slap<br>Play fair. Have fun.</div>
+</nav>

@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kiss or Slap - Register</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body class="page-auth page-register">
+  <div class="auth-card">
+    <div class="brand-logo">
+      <img src="{{ url_for('static', filename='logo.png') }}" alt="Kiss or Slap Logo">
+      <h1>Kiss/Slap</h1>
+    </div>
+
+    <div class="auth-header">
+      <h2>Create Your Profile</h2>
+      <p>Join the Elo arena and start matching!</p>
+    </div>
+
+    {% if error %}<p class="auth-error">{{ error }}</p>{% endif %}
+
+    <form method="post" enctype="multipart/form-data" action="{{ url_for('register') }}">
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="name">Display Name</label>
+          <div class="input-wrapper">
+            <i class="fa-solid fa-user"></i>
+            <input type="text" id="name" name="name" placeholder="e.g. Sophie" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="age">Age</label>
+          <div class="input-wrapper">
+            <i class="fa-solid fa-cake-candles"></i>
+            <input type="number" id="age" name="age" min="18" max="99" placeholder="22" required>
+          </div>
+        </div>
+
+        <div class="form-group full-width">
+          <label for="sex">Gender / Pronouns</label>
+          <div class="input-wrapper">
+            <i class="fa-solid fa-venus-mars"></i>
+            <select id="sex" name="sex" required>
+              <option value="" disabled selected>Select your gender</option>
+              <option value="F">She</option>
+              <option value="M">He</option>
+              <option value="X">Sher</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group full-width">
+          <label for="email">Email</label>
+          <div class="input-wrapper">
+            <i class="fa-solid fa-envelope"></i>
+            <input type="email" id="email" name="email" placeholder="name@example.com" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="city">City</label>
+          <div class="input-wrapper">
+            <i class="fa-solid fa-location-dot"></i>
+            <input type="text" id="city" name="city" placeholder="e.g. Paris" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="job">Profession / Tagline</label>
+          <div class="input-wrapper">
+            <i class="fa-solid fa-briefcase"></i>
+            <input type="text" id="job" name="job" placeholder="e.g. Photographer" required>
+          </div>
+        </div>
+
+        <div class="form-group full-width">
+          <label for="file-input">Profile Picture</label>
+          <div class="avatar-upload">
+            <img src="{{ url_for('static', filename='logo.png') }}" class="avatar-preview" id="preview" alt="Profile preview">
+            <input class="file-input" type="file" name="image" accept="image/*" id="file-input" onchange="document.getElementById('preview').src = window.URL.createObjectURL(this.files[0])" required>
+            <button type="button" class="btn-submit choose-image" onclick="document.getElementById('file-input').click()">Choose Image</button>
+          </div>
+        </div>
+
+        <div class="form-group full-width">
+          <label for="password">Password</label>
+          <div class="input-wrapper">
+            <i class="fa-solid fa-lock"></i>
+            <input type="password" id="password" name="password" placeholder="********" required>
+          </div>
+        </div>
+      </div>
+
+      <button type="submit" class="btn-submit">Complete Registration</button>
+    </form>
+
+    <div class="auth-footer">
+      Already have an account? <a href="{{ url_for('login') }}">Sign In</a>
+    </div>
+  </div>
+</body>
+</html>

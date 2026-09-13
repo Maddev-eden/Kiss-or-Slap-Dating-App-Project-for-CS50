@@ -1,0 +1,177 @@
+{% extends "index.html" %}
+
+{% block title %}Boost Shop{% endblock %}
+{% block page_class %}page-boost{% endblock %}
+
+{% block content %}
+<div class="content-wrapper" style="max-width: 800px; margin: 0 auto; padding: 20px;">
+
+  <!-- Profile Header Card -->
+  <div class="dashboard-card" style="display: flex; align-items: center; justify-content: space-between; background: #1e1e24; padding: 20px; border-radius: 12px; margin-bottom: 25px; border: 1px solid #2d2d3a;">
+    <div style="display: flex; align-items: center; gap: 15px;">
+      <img src="{{ media_url(profile_image) }}" alt="{{ profile_name }}" style="width: 60px; height: 60px; border-radius: 50%; object-fit: cover; border: 2px solid #ff4757;">
+      <div>
+        <h3 style="margin: 0; color: #fff;">{{ profile_name }}</h3>
+        <span style="color: #aaa; font-size: 13px;">Bucket {{ bucket }} • Elo: <strong style="color: #ff4757;">{{ elo }}</strong></span>
+      </div>
+    </div>
+    
+    <!-- User Resources -->
+    <div style="display: flex; gap: 20px; font-size: 14px; font-weight: bold;">
+      <div style="color: #ff6b81; background: #2a2a32; padding: 8px 14px; border-radius: 8px; border: 1px solid #3f3f4e;">
+        <i class="fa-solid fa-flask"></i> {{ potions }} Love
+      </div>
+      <div style="color: #a29bfe; background: #2a2a32; padding: 8px 14px; border-radius: 8px; border: 1px solid #3f3f4e;">
+        <i class="fa-solid fa-gem"></i> {{ elixirs }} Dark
+      </div>
+    </div>
+  </div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div style="background: #ff475722; border: 1px solid #ff4757; color: #ff4757; padding: 12px; border-radius: 8px; margin-bottom: 20px; text-align: center;">
+          <i class="fa-solid fa-circle-exclamation"></i> {{ message }}
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <!-- Boosts Catalog -->
+  <h3 style="color: #fff; margin-bottom: 15px;"><i class="fa-solid fa-store"></i> Available Boosts</h3>
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; margin-bottom: 35px;">
+    
+    <!-- 1. Temp Elo Boost -->
+    <div style="background: #1e1e24; padding: 20px; border-radius: 10px; border: 1px solid #2d2d3a; display: flex; flex-direction: column; justify-content: space-between;">
+      <div>
+        <div style="font-size: 24px; color: #ff4757; margin-bottom: 10px;"><i class="fa-solid fa-bolt"></i></div>
+        <h4 style="margin: 0 0 5px 0; color: #fff;">Temporary Elo Boost</h4>
+        <p style="color: #888; font-size: 13px; margin-bottom: 15px;">Gain +150 temporary Elo for 24 hours.</p>
+      </div>
+      <div>
+        <div style="color: #ff6b81; font-weight: bold; margin-bottom: 10px; font-size: 14px;">500 Love Potions</div>
+        <form method="POST" action="{{ url_for('boost_elo_temp') }}">
+          {% if active_boosts.elo_temp %}
+            <button type="button" disabled style="width: 100%; padding: 10px; background: #3a3a4a; color: #777; border: none; border-radius: 6px; cursor: not-allowed; font-weight: bold;">
+              <i class="fa-solid fa-check"></i> Already Active
+            </button>
+          {% else %}
+            <button type="submit" style="width: 100%; padding: 10px; background: #ff4757; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">
+              Buy Boost
+            </button>
+          {% endif %}
+        </form>
+      </div>
+    </div>
+
+    <!-- 2. Permanent Elo Boost -->
+    <div style="background: #1e1e24; padding: 20px; border-radius: 10px; border: 1px solid #2d2d3a; display: flex; flex-direction: column; justify-content: space-between;">
+      <div>
+        <div style="font-size: 24px; color: #ffa502; margin-bottom: 10px;"><i class="fa-solid fa-trophy"></i></div>
+        <h4 style="margin: 0 0 5px 0; color: #fff;">Permanent Elo Boost</h4>
+        <p style="color: #888; font-size: 13px; margin-bottom: 15px;">Permanently add +50 score to your Elo.</p>
+      </div>
+      <div>
+        <div style="color: #ff6b81; font-weight: bold; margin-bottom: 10px; font-size: 14px;">1200 Love Potions</div>
+        <form method="POST" action="{{ url_for('boost_elo_perm') }}">
+          <button type="submit" style="width: 100%; padding: 10px; background: #ff4757; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">
+            Buy Boost
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- 3. Slap Shield -->
+    <div style="background: #1e1e24; padding: 20px; border-radius: 10px; border: 1px solid #2d2d3a; display: flex; flex-direction: column; justify-content: space-between;">
+      <div>
+        <div style="font-size: 24px; color: #70a1ff; margin-bottom: 10px;"><i class="fa-solid fa-shield-halved"></i></div>
+        <h4 style="margin: 0 0 5px 0; color: #fff;">Anti-Slap Shield</h4>
+        <p style="color: #888; font-size: 13px; margin-bottom: 15px;">Blocks up to 5 incoming slaps without losing Elo.</p>
+      </div>
+      <div>
+        <div style="color: #a29bfe; font-weight: bold; margin-bottom: 10px; font-size: 14px;">400 Dark Elixir</div>
+        <form method="POST" action="{{ url_for('shield_slaps') }}">
+          {% if active_boosts.shield_charges > 0 %}
+            <button type="button" disabled style="width: 100%; padding: 10px; background: #3a3a4a; color: #777; border: none; border-radius: 6px; cursor: not-allowed; font-weight: bold;">
+              <i class="fa-solid fa-shield"></i> Active ({{ active_boosts.shield_charges }} charges left)
+            </button>
+          {% else %}
+            <button type="submit" style="width: 100%; padding: 10px; background: #70a1ff; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">
+              Buy Shield
+            </button>
+          {% endif %}
+        </form>
+      </div>
+    </div>
+
+    <!-- 4. Double Edge Mode -->
+    <div style="background: #1e1e24; padding: 20px; border-radius: 10px; border: 1px solid #2d2d3a; display: flex; flex-direction: column; justify-content: space-between;">
+      <div>
+        <div style="font-size: 24px; color: #ff6b81; margin-bottom: 10px;"><i class="fa-solid fa-skull"></i></div>
+        <h4 style="margin: 0 0 5px 0; color: #fff;">Double Edge Mode</h4>
+        <p style="color: #888; font-size: 13px; margin-bottom: 15px;">Doubles Elo gains and losses for 24 hours.</p>
+      </div>
+      <div>
+        <div style="color: #a29bfe; font-weight: bold; margin-bottom: 10px; font-size: 14px;">750 Dark Elixir</div>
+        <form method="POST" action="{{ url_for('double_edge') }}">
+          {% if active_boosts.double_edge %}
+            <button type="button" disabled style="width: 100%; padding: 10px; background: #3a3a4a; color: #777; border: none; border-radius: 6px; cursor: not-allowed; font-weight: bold;">
+              <i class="fa-solid fa-check"></i> Already Active
+            </button>
+          {% else %}
+            <button type="submit" style="width: 100%; padding: 10px; background: #70a1ff; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">
+              Activate Mode
+            </button>
+          {% endif %}
+        </form>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- SECTION: Active Boosts Panel -->
+  <h3 style="color: #fff; margin-bottom: 15px;"><i class="fa-solid fa-circle-check"></i> Active Effects</h3>
+  <div style="background: #1e1e24; padding: 20px; border-radius: 10px; border: 1px solid #2d2d3a;">
+    
+    {% if not active_boosts.elo_temp and active_boosts.shield_charges == 0 and not active_boosts.double_edge %}
+      <p style="color: #666; margin: 0; text-align: center; padding: 10px 0;">No active boosts at the moment.</p>
+    {% else %}
+      <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px;">
+        
+        {% if active_boosts.elo_temp %}
+          <li style="display: flex; justify-content: space-between; align-items: center; background: #2a2a32; padding: 12px 16px; border-radius: 8px; border-left: 4px solid #ff4757;">
+            <div>
+              <strong style="color: #fff; display: block;"><i class="fa-solid fa-bolt" style="color: #ff4757;"></i> Temporary Elo (+150 Elo)</strong>
+              <span style="color: #aaa; font-size: 12px;">Expires at: {{ active_boosts.temp_expires }}</span>
+            </div>
+            <span style="background: #ff475722; color: #ff4757; font-size: 12px; padding: 4px 8px; border-radius: 4px; font-weight: bold;">ACTIVE</span>
+          </li>
+        {% endif %}
+
+        {% if active_boosts.shield_charges > 0 %}
+          <li style="display: flex; justify-content: space-between; align-items: center; background: #2a2a32; padding: 12px 16px; border-radius: 8px; border-left: 4px solid #70a1ff;">
+            <div>
+              <strong style="color: #fff; display: block;"><i class="fa-solid fa-shield-halved" style="color: #70a1ff;"></i> Anti-Slap Shield</strong>
+              <span style="color: #aaa; font-size: 12px;">Remaining charges: <strong>{{ active_boosts.shield_charges }}</strong> slap(s)</span>
+            </div>
+            <span style="background: #70a1ff22; color: #70a1ff; font-size: 12px; padding: 4px 8px; border-radius: 4px; font-weight: bold;">ACTIVE</span>
+          </li>
+        {% endif %}
+
+        {% if active_boosts.double_edge %}
+          <li style="display: flex; justify-content: space-between; align-items: center; background: #2a2a32; padding: 12px 16px; border-radius: 8px; border-left: 4px solid #ff6b81;">
+            <div>
+              <strong style="color: #fff; display: block;"><i class="fa-solid fa-skull" style="color: #ff6b81;"></i> Double Edge Mode (x2 Elo)</strong>
+              <span style="color: #aaa; font-size: 12px;">Expires at: {{ active_boosts.double_edge_expires }}</span>
+            </div>
+            <span style="background: #ff6b8122; color: #ff6b81; font-size: 12px; padding: 4px 8px; border-radius: 4px; font-weight: bold;">ACTIVE</span>
+          </li>
+        {% endif %}
+
+      </ul>
+    {% endif %}
+
+  </div>
+
+</div>
+{% endblock %}

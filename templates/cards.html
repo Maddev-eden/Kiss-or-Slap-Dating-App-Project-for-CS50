@@ -1,0 +1,128 @@
+{% extends "index.html" %}
+
+{% block title %}Kiss or Slap - Home{% endblock %}
+{% block page_class %}page-home{% endblock %}
+
+{% block content %}
+  {% set card_list = cards|default([]) %}
+
+  <!-- Indicateur Pull-to-Refresh pour Mobile -->
+  <div id="ptr-indicator" class="ptr-indicator">
+    <div class="ptr-spinner">
+      <i class="fa-solid fa-rotate-right"></i>
+    </div>
+  </div>
+
+  <div class="content-wrapper">
+    <!-- Barre d'actions (Boutons Desktop) -->
+    <div class="page-header-actions" style="display: flex; justify-content: flex-end; gap: 12px; margin-bottom: 20px;">
+      <!-- Bouton Refresh Desktop -->
+      <button type="button" class="btn-action btn-refresh desktop-only" onclick="window.location.reload();">
+        <i class="fa-solid fa-rotate-right"></i>
+        Refresh
+      </button>
+
+      <!-- Bouton vers les Kisses / Matches -->
+      <a href="{{ url_for('kiss') }}" class="btn-action btn-kiss" style="text-decoration: none; width: auto; padding: 10px 20px;">
+        <i class="fa-solid fa-heart"></i>
+        View Kisses & Matches
+      </a>
+    </div>
+
+    <div class="cards-container">
+      {% for card in card_list %}
+        {% set image_url = media_url(card.image) %}
+        <article class="user-card" data-user-id="{{ card.id|default('') }}">
+          <div class="card-image-wrapper">
+            <img class="card-image" src="{{ image_url }}" alt="{{ card.name|default('User profile') }}">
+            <div class="scores-header">
+              <span class="score-badge">
+                <i class="fa-solid fa-kiss-wink-heart"></i>
+                {{ card.kisses|default(0) }}
+              </span>
+              <span class="score-badge">
+                <i class="fa-solid fa-hand-back-fist"></i>
+                {{ card.slaps|default(0) }}
+              </span>
+            </div>
+
+            <div class="card-user-info">
+              <h3>{{ card.name|default('Unknown user') }}{% if card.age %}, {{ card.age }}{% endif %}</h3>
+              <p>{{ card.location|default('') }}</p>
+            </div>
+          </div>
+          
+          <!-- Soumission directe du formulaire sans AJAX -->
+          <form class="card-actions" method="POST" action="{{ url_for('handle_action', user_id=card.id) }}">
+            <button class="btn-action btn-kiss" type="submit" name="action" value="kiss">
+              <i class="fa-solid fa-kiss-wink-heart"></i>
+              Kiss
+            </button>
+            <button class="btn-action btn-slap" type="submit" name="action" value="slap">
+              <i class="fa-solid fa-hand-back-fist"></i>
+              Slap
+            </button>
+          </form>
+
+        </article>
+      {% else %}
+        <p class="empty-state">No users to show.</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- JavaScript uniquement pour le Pull-to-Refresh mobile -->
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const ptrIndicator = document.getElementById("ptr-indicator");
+  const icon = ptrIndicator.querySelector("i");
+
+  let startY = 0;
+  let pulling = false;
+  const threshold = 80;
+
+  const isAtTop = () => window.scrollY <= 0;
+
+  window.addEventListener("touchstart", (e) => {
+    if (isAtTop()) {
+      startY = e.touches[0].screenY;
+      pulling = true;
+    }
+  }, { passive: true });
+
+  window.addEventListener("touchmove", (e) => {
+    if (!pulling) return;
+    const diffY = e.touches[0].screenY - startY;
+
+    if (diffY > 0 && isAtTop()) {
+      e.preventDefault();
+      const moveDistance = Math.min(diffY * 0.4, 100);
+      ptrIndicator.style.transform = `translate(-50%, ${moveDistance}px)`;
+      icon.style.transform = `rotate(${moveDistance * 4}deg)`;
+    } else if (diffY < 0) {
+      pulling = false;
+      ptrIndicator.style.transform = `translate(-50%, -60px)`;
+    }
+  }, { passive: false });
+
+  const endPull = (e) => {
+    if (!pulling) return;
+    pulling = false;
+    const endY = (e.changedTouches ? e.changedTouches[0].screenY : startY);
+    const diffY = endY - startY;
+
+    if (diffY * 0.4 >= threshold) {
+      ptrIndicator.classList.add("refreshing");
+      ptrIndicator.style.transform = `translate(-50%, 60px)`;
+      setTimeout(() => window.location.reload(), 500);
+    } else {
+      ptrIndicator.style.transform = `translate(-50%, -60px)`;
+      icon.style.transform = `rotate(0deg)`;
+    }
+  };
+
+  window.addEventListener("touchend", endPull);
+  window.addEventListener("touchcancel", endPull);
+});
+</script>
+{% endblock %}

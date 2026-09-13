@@ -1,0 +1,587 @@
+from pathlib import Path
+from uuid import uuid4
+from functools import wraps
+
+from flask import Flask, redirect, render_template, request, send_from_directory, session, url_for
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import text
+from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.utils import secure_filename
+
+
+app = Flask(__name__)
+app.config["SECRET_KEY"] = "development-only-change-me"
+DATABASE_PATH = Path(__file__).with_name("data.db")
+app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{DATABASE_PATH}"
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+db = SQLAlchemy(app)
+UPLOAD_FOLDER = Path(app.static_folder) / "uploads"
+UPLOAD_FOLDER.mkdir(exist_ok=True)
+ALLOWED_IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "gif", "webp"}
+CURRENT_USER_ID = 1
+
+
+SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    age INTEGER NOT NULL,
+    location TEXT NOT NULL,
+    image_url TEXT NOT NULL,
+    email TEXT UNIQUE,
+    password_hash TEXT,
+    profile_handle TEXT,
+    kisses INTEGER NOT NULL DEFAULT 0,
+    slaps INTEGER NOT NULL DEFAULT 0,
+    elo INTEGER NOT NULL DEFAULT 1000,
+    bucket INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS boosts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    icon TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    resource_type TEXT NOT NULL CHECK (resource_type IN ('potion', 'elixir')),
+    price INTEGER NOT NULL,
+    action TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS matches (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+	sender_id INTEGER NOT NULL,
+	receiver_id INTEGER NOT NULL,
+	status TEXT NOT NULL DEFAULT 'matched',
+	created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY (sender_id) REFERENCES users(id),
+	FOREIGN KEY (receiver_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS conversations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+	sender_id INTEGER NOT NULL,
+	receiver_id INTEGER NOT NULL,
+    last_message TEXT NOT NULL,
+    last_message_time TEXT NOT NULL,
+    unread INTEGER NOT NULL DEFAULT 0,
+	is_online INTEGER NOT NULL DEFAULT 0,
+	FOREIGN KEY (sender_id) REFERENCES users(id),
+	FOREIGN KEY (receiver_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id INTEGER NOT NULL,
+	sender_id INTEGER NOT NULL,
+	receiver_id INTEGER NOT NULL,
+    body TEXT NOT NULL,
+    sent_at TEXT NOT NULL,
+	FOREIGN KEY (conversation_id) REFERENCES conversations(id),
+	FOREIGN KEY (sender_id) REFERENCES users(id),
+	FOREIGN KEY (receiver_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS account_settings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    action TEXT NOT NULL
+);
+"""
+
+
+def initialize_database():
+	for statement in SCHEMA_SQL.split(";"):
+		if statement.strip():
+			db.session.execute(text(statement))
+
+	def add_column(table, column, definition):
+		columns = db.session.execute(text(f"PRAGMA table_info({table})")).all()
+		if column not in {row[1] for row in columns}:
+			db.session.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {definition}"))
+
+	def has_column(table, column):
+		return column in {row[1] for row in db.session.execute(text(f"PRAGMA table_info({table})")).all()}
+
+	# Keep existing databases compatible with the new participant-based schema.
+	add_column("matches", "sender_id", "INTEGER")
+	add_column("matches", "receiver_id", "INTEGER")
+	add_column("matches", "status", "TEXT DEFAULT 'matched'")
+	add_column("matches", "created_at", "TEXT")
+	add_column("matches", "name", "TEXT")
+	add_column("matches", "image_url", "TEXT")
+	add_column("conversations", "sender_id", "INTEGER")
+	add_column("conversations", "receiver_id", "INTEGER")
+	add_column("conversations", "name", "TEXT")
+	add_column("conversations", "image_url", "TEXT")
+	add_column("messages", "sender_id", "INTEGER")
+	add_column("messages", "receiver_id", "INTEGER")
+	add_column("messages", "sender", "TEXT")
+
+	user_count = db.session.execute(text("SELECT COUNT(*) FROM users")).scalar_one()
+	if user_count == 0:
+		users = [
+			("Sophie", 22, "Paris, France", "images/berserk.jpg", "sophie@example.com", "@sophie", 1240, 310, 1450, 4),
+			("Lucas", 25, "Lyon, France", "images/c6993ad948cbf6dc3318afafab232a3e.jpg", "lucas@example.com", "@lucas", 890, 1100, 1320, 4),
+			("Clara", 21, "Bordeaux, France", "images/Dara icon ♡.jpg", "clara@example.com", "@clara", 3450, 120, 1580, 5),
+			("Alexandre", 25, "Paris", "images/Download - 2026-04-18T172117.334.jpg", "alexandre@example.com", "@alexandre", 8200, 410, 1510, 5),
+			("Emma", 21, "Lyon", "images/Download - 2026-04-18T172223.893.jpg", "emma@example.com", "@emma", 7500, 180, 1480, 5),
+			("Julien", 23, "Bordeaux", "images/Download - 2026-04-18T172258.214.jpg", "julien@example.com", "@julien", 6100, 920, 1390, 4),
+			("Mathieu", 26, "Marseille", "images/Download - 2026-04-18T172334.263.jpg", "mathieu@example.com", "@mathieu", 5400, 310, 1360, 4),
+		]
+		db.session.execute(text("""
+			INSERT INTO users (name, age, location, image_url, email, profile_handle, kisses, slaps, elo, bucket)
+			VALUES (:name, :age, :location, :image_url, :email, :profile_handle, :kisses, :slaps, :elo, :bucket)
+		"""), [
+			{"name": row[0], "age": row[1], "location": row[2], "image_url": row[3], "email": row[4], "profile_handle": row[5], "kisses": row[6], "slaps": row[7], "elo": row[8], "bucket": row[9]}
+			for row in users
+		])
+
+	if has_column("matches", "name"):
+		db.session.execute(text("""
+			UPDATE matches SET sender_id = :current_user,
+			receiver_id = (SELECT id FROM users WHERE name = matches.name)
+			WHERE sender_id IS NULL AND receiver_id IS NULL
+		"""), {"current_user": CURRENT_USER_ID})
+	if has_column("conversations", "name"):
+		db.session.execute(text("""
+			UPDATE conversations SET sender_id = :current_user,
+			receiver_id = (SELECT id FROM users WHERE name = conversations.name)
+			WHERE sender_id IS NULL AND receiver_id IS NULL
+		"""), {"current_user": CURRENT_USER_ID})
+		db.session.execute(text("""
+			UPDATE conversations
+			SET sender_id = :current_user,
+				receiver_id = CASE name WHEN 'Sophie' THEN 2 WHEN 'Lucas' THEN 3 ELSE receiver_id END
+			WHERE name IN ('Sophie', 'Lucas')
+		"""), {"current_user": CURRENT_USER_ID})
+	if has_column("messages", "sender"):
+		db.session.execute(text("""
+			UPDATE messages
+			SET sender_id = CASE WHEN sender = 'me' THEN :current_user ELSE c.receiver_id END,
+				receiver_id = CASE WHEN sender = 'me' THEN c.receiver_id ELSE :current_user END
+			FROM conversations c
+			WHERE messages.conversation_id = c.id
+			AND messages.sender_id IS NULL
+		"""), {"current_user": CURRENT_USER_ID})
+		db.session.execute(text("""
+			UPDATE messages
+			SET sender_id = CASE WHEN sender = 'me' THEN :current_user ELSE c.receiver_id END,
+				receiver_id = CASE WHEN sender = 'me' THEN c.receiver_id ELSE :current_user END
+			FROM conversations c
+			WHERE messages.conversation_id = c.id
+		"""), {"current_user": CURRENT_USER_ID})
+
+	boost_count = db.session.execute(text("SELECT COUNT(*) FROM boosts")).scalar_one()
+	if boost_count == 0:
+		db.session.execute(text("""
+			INSERT INTO boosts (icon, title, description, resource_type, price, action)
+			VALUES (:icon, :title, :description, :resource_type, :price, :action)
+		"""), [
+			{"icon": "fa-rocket", "title": "Mega Elo Overdrive", "description": "Temporarily increases your Elo rating massively for 1 hour.", "resource_type": "potion", "price": 50, "action": "Activate"},
+			{"icon": "fa-chart-line", "title": "Permanent Elo Gain", "description": "Adds a moderate amount of Elo points to your base rating.", "resource_type": "potion", "price": 100, "action": "Purchase"},
+			{"icon": "fa-shield-halved", "title": "Anti-Slap Shield", "description": "Blocks the Elo penalty from your next 5 slaps.", "resource_type": "elixir", "price": 30, "action": "Purchase"},
+			{"icon": "fa-skull-crossbones", "title": "Double-Edged Sword", "description": "Earn 2x Elo from Kisses but lose 2x Elo from Slaps for 24h.", "resource_type": "elixir", "price": 40, "action": "Activate"},
+		])
+
+	match_count = db.session.execute(text("SELECT COUNT(*) FROM matches")).scalar_one()
+	if match_count == 0:
+		db.session.execute(text("""
+			INSERT INTO matches (sender_id, receiver_id, name, image_url, status)
+			SELECT :sender_id, u.id, u.name, u.image_url, :status
+			FROM users u WHERE u.id = :receiver_id
+		"""), [
+			{"sender_id": 1, "receiver_id": 3, "status": "matched"},
+			{"sender_id": 1, "receiver_id": 5, "status": "matched"},
+			{"sender_id": 1, "receiver_id": 6, "status": "matched"},
+		])
+
+	conversation_count = db.session.execute(text("SELECT COUNT(*) FROM conversations")).scalar_one()
+	if conversation_count == 0:
+		db.session.execute(text("""
+			INSERT INTO conversations (sender_id, receiver_id, name, image_url, last_message, last_message_time, unread, is_online)
+			VALUES (:sender_id, :receiver_id, :name, :image_url, :last_message, :last_message_time, :unread, :is_online)
+		"""), [
+			{"sender_id": 1, "receiver_id": 2, "name": "Lucas", "image_url": "images/c6993ad948cbf6dc3318afafab232a3e.jpg", "last_message": "Hey! Liked your photo in Paris", "last_message_time": "14:32", "unread": 2, "is_online": 1},
+			{"sender_id": 2, "receiver_id": 1, "name": "Sophie", "image_url": "images/berserk.jpg", "last_message": "You owe me a kiss for that slap!", "last_message_time": "Yesterday", "unread": 0, "is_online": 0},
+		])
+
+	message_count = db.session.execute(text("SELECT COUNT(*) FROM messages")).scalar_one()
+	if message_count == 0:
+		db.session.execute(text("""
+			INSERT INTO messages (conversation_id, sender_id, receiver_id, body, sent_at)
+			VALUES (:conversation_id, :sender_id, :receiver_id, :body, :sent_at)
+		"""), [
+			{"conversation_id": 1, "sender_id": 2, "receiver_id": 1, "body": "Hey! Liked your photo in Paris", "sent_at": "14:30"},
+			{"conversation_id": 1, "sender_id": 2, "receiver_id": 1, "body": "Are you going to the party this weekend?", "sent_at": "14:32"},
+			{"conversation_id": 1, "sender_id": 1, "receiver_id": 2, "body": "Hey Sophie! Thanks! Yes, I'm definitely going", "sent_at": "14:35"},
+		])
+
+	setting_count = db.session.execute(text("SELECT COUNT(*) FROM account_settings")).scalar_one()
+	if setting_count == 0:
+		db.session.execute(text("INSERT INTO account_settings (title, description, action) VALUES (:title, :description, :action)"), [
+			{"title": "Profile information", "description": "Update your name and profile photo.", "action": "Edit"},
+			{"title": "Notifications", "description": "Choose when Kiss or Slap can notify you.", "action": "Manage"},
+			{"title": "Privacy", "description": "Control your profile visibility.", "action": "Manage"},
+		])
+
+
+	db.session.commit()
+
+def ensure_test_account_messages():
+	test_user = db.session.execute(text("SELECT id FROM users WHERE email = 'test.player@example.com'")).scalar()
+	if not test_user:
+		return
+	conversation_id = db.session.execute(text("""
+		SELECT id FROM conversations
+		WHERE (sender_id = :test_user AND receiver_id = :current_user)
+		OR (sender_id = :current_user AND receiver_id = :test_user)
+		ORDER BY id DESC LIMIT 1
+	"""), {"test_user": test_user, "current_user": CURRENT_USER_ID}).scalar()
+	if not conversation_id or db.session.execute(text("SELECT 1 FROM messages WHERE conversation_id = :conversation_id LIMIT 1"), {"conversation_id": conversation_id}).first():
+		return
+	db.session.execute(text("""
+		INSERT INTO messages (conversation_id, sender_id, receiver_id, sender, body, sent_at)
+		VALUES (:conversation_id, :sender_id, :receiver_id, :sender, :body, :sent_at)
+	"""), [
+		{"conversation_id": conversation_id, "sender_id": CURRENT_USER_ID, "receiver_id": test_user, "sender": "them", "body": "Welcome to Kiss/Slap!", "sent_at": "09:00"},
+		{"conversation_id": conversation_id, "sender_id": test_user, "receiver_id": CURRENT_USER_ID, "sender": "me", "body": "Thanks! Happy to be here.", "sent_at": "09:01"},
+	])
+	db.session.execute(text("UPDATE conversations SET last_message = :last_message WHERE id = :conversation_id"), {"last_message": "Thanks! Happy to be here.", "conversation_id": conversation_id})
+	db.session.commit()
+
+
+with app.app_context():
+	initialize_database()
+	ensure_test_account_messages()
+
+
+def rows(sql, params=None):
+	result = db.session.execute(text(sql), params or {})
+	return [dict(row) for row in result.mappings()]
+
+
+def media_url(filename):
+	if not filename:
+		return url_for("static", filename="logo.png")
+	return url_for("uploaded_image", filename=filename)
+
+
+def current_user_id():
+	return session.get("user_id", CURRENT_USER_ID)
+
+
+def login_required(view):
+	@wraps(view)
+	def wrapped_view(*args, **kwargs):
+		if "user_id" not in session:
+			return redirect(url_for("login", next=request.path))
+		return view(*args, **kwargs)
+	return wrapped_view
+
+
+@app.context_processor
+def shared_navigation():
+	return {
+		"nav_items": [
+			{"key": "home", "label": "Home", "href": url_for("home"), "icon": "fa-house"},
+			{"key": "top", "label": "Top", "href": url_for("top"), "icon": "fa-trophy"},
+			{"key": "boost", "label": "Boost", "href": url_for("boost"), "icon": "fa-bolt"},
+			{"key": "messages", "label": "Messages", "href": url_for("messages"), "icon": "fa-comment-dots"},
+			{"key": "account", "label": "Account", "href": url_for("account"), "icon": "fa-user"},
+		],
+		"logout_url": url_for("logout"),
+		"logo_url": url_for("static", filename="logo.png"),
+		"media_url": media_url,
+	}
+
+
+@app.get("/media/<path:filename>")
+def uploaded_image(filename):
+	return send_from_directory(app.static_folder, filename)
+
+
+@app.get("/")
+@login_required
+def home():
+	cards = rows("""
+		SELECT id, name, age, location, image_url AS image, kisses, slaps
+		FROM users ORDER BY id LIMIT 3
+	""")
+	for card in cards:
+		card["kisses"] = f"{card['kisses']:,}"
+		card["slaps"] = f"{card['slaps']:,}"
+	return render_template("cards.html", active_page="home", cards=cards)
+
+
+def static_page(filename):
+	return redirect(url_for("static", filename=filename))
+
+
+@app.get("/top")
+@login_required
+def top():
+	ordered = rows("""
+		SELECT name, age, location, image_url AS image, kisses, slaps
+		FROM users ORDER BY kisses DESC
+	""")
+	podium = [
+		{"rank": index, "name": user["name"], "image": user["image"], "kisses": f"{user['kisses'] / 1000:.1f}K"}
+		for index, user in [(1, ordered[0]), (2, ordered[1]), (3, ordered[2])]
+	]
+	leaderboard = [
+		{"rank": index, "name": user["name"], "location": user["location"], "age": user["age"], "image": user["image"], "kisses": f"{user['kisses'] / 1000:.1f}K", "slaps": user["slaps"]}
+		for index, user in enumerate(ordered[3:], start=4)
+	]
+	return render_template("top.html", active_page="top", podium=podium, leaderboard=leaderboard)
+
+
+@app.get("/boost")
+@login_required
+def boost():
+	boosts = rows("""
+		SELECT icon, title, description, resource_type AS type, price, action
+		FROM boosts ORDER BY id
+	""")
+	profile = rows("SELECT image_url AS image FROM users WHERE id = :user_id", {"user_id": current_user_id()})[0]
+	return render_template("boost.html", active_page="boost", boosts=boosts, profile_image=profile["image"], potions=120, elixirs=45, elo=1450, bucket=4)
+
+
+@app.get("/messages")
+@login_required
+def messages():
+	user_id = current_user_id()
+	matches = rows("""
+		SELECT u.id AS user_id, u.name, u.image_url AS image
+		FROM matches m
+		JOIN users u ON u.id = CASE WHEN m.sender_id = :current_user THEN m.receiver_id ELSE m.sender_id END
+		WHERE m.sender_id = :current_user OR m.receiver_id = :current_user
+		ORDER BY m.id
+	""", {"current_user": user_id})
+	conversations = rows("""
+		SELECT c.id, u.id AS contact_id, u.name, u.image_url AS image,
+		c.last_message AS message, c.last_message_time AS time, c.unread,
+		c.is_online AS online, COUNT(m.id) AS message_count
+		FROM conversations c
+		JOIN users u ON u.id = CASE WHEN c.sender_id = :current_user THEN c.receiver_id ELSE c.sender_id END
+		LEFT JOIN messages m ON m.conversation_id = c.id
+		WHERE c.sender_id = :current_user OR c.receiver_id = :current_user
+		GROUP BY c.id, u.id
+		HAVING NOT EXISTS (
+			SELECT 1
+			FROM conversations newer
+			LEFT JOIN messages newer_messages ON newer_messages.conversation_id = newer.id
+			WHERE ((newer.sender_id = :current_user AND newer.receiver_id = u.id)
+				OR (newer.sender_id = u.id AND newer.receiver_id = :current_user))
+			GROUP BY newer.id
+			HAVING COUNT(newer_messages.id) > COUNT(m.id)
+				OR (COUNT(newer_messages.id) = COUNT(m.id) AND newer.id > c.id)
+		)
+		ORDER BY c.last_message_time DESC, c.id DESC
+	""", {"current_user": user_id})
+	# FIX: previously `selected` stayed None whenever the URL had no
+	# `?conversation_id=`, which is the normal case (nav link, and the
+	# redirect from send_profile_message). That made chat_messages always
+	# empty on a plain visit to /messages, even though messages existed.
+	# Now we default to the most recent conversation in that case.
+	selected_id = request.args.get("conversation_id", type=int)
+	if selected_id is not None:
+		selected = next((item for item in conversations if item["id"] == selected_id), None)
+	else:
+		selected = conversations[0] if conversations else None
+	if selected:
+		selected_has_messages = db.session.execute(text("SELECT 1 FROM messages WHERE conversation_id = :conversation_id LIMIT 1"), {"conversation_id": selected["id"]}).first()
+		if not selected_has_messages:
+			selected = next((item for item in conversations if item["message_count"] > 0), selected)
+	chat_messages = []
+	if selected:
+		chat_messages = rows("""
+			SELECT sender_id, receiver_id, body, sent_at
+			FROM messages WHERE conversation_id = :conversation_id ORDER BY id
+		""", {"conversation_id": selected["id"]})
+	return render_template("messages.html", active_page="messages", matches=matches, conversations=conversations, selected_conversation=selected, chat_messages=chat_messages, current_user_id=user_id)
+
+
+@app.post("/messages/<int:conversation_id>/send")
+@login_required
+def send_message(conversation_id):
+	user_id = current_user_id()
+	conversation = rows("""
+		SELECT id, sender_id, receiver_id FROM conversations
+		WHERE id = :conversation_id
+		AND (sender_id = :user_id OR receiver_id = :user_id)
+	""", {"conversation_id": conversation_id, "user_id": user_id})
+	if not conversation:
+		return render_template("error.html", error_code=403, error_title="Conversation unavailable"), 403
+
+	conversation = conversation[0]
+	receiver_id = conversation["receiver_id"] if conversation["sender_id"] == user_id else conversation["sender_id"]
+	body = request.form.get("body", "").strip()
+	if body:
+		db.session.execute(text("""
+			INSERT INTO messages (conversation_id, sender_id, receiver_id, sender, body, sent_at)
+			VALUES (:conversation_id, :sender_id, :receiver_id, :sender, :body, CURRENT_TIMESTAMP)
+		"""), {"conversation_id": conversation_id, "sender_id": user_id, "receiver_id": receiver_id, "sender": "me", "body": body})
+		db.session.execute(text("""
+			UPDATE conversations SET last_message = :body, last_message_time = CURRENT_TIMESTAMP
+			WHERE id = :conversation_id
+		"""), {"body": body, "conversation_id": conversation_id})
+		db.session.commit()
+	return redirect(url_for("messages", conversation_id=conversation_id))
+
+
+@app.get("/profile/<int:user_id>")
+@login_required
+def profile(user_id):
+	user = rows("""
+		SELECT id, name, age, location, image_url AS image, profile_handle,
+		kisses, slaps, elo, bucket
+		FROM users WHERE id = :user_id
+	""", {"user_id": user_id})
+	if not user:
+		return render_template("error.html", error_code=404, error_title="Profile not found"), 404
+
+	viewer_id = current_user_id()
+	is_match = bool(rows("""
+		SELECT id FROM matches
+		WHERE status = 'matched'
+		AND ((sender_id = :viewer_id AND receiver_id = :profile_id)
+		OR (sender_id = :profile_id AND receiver_id = :viewer_id))
+	""", {"viewer_id": viewer_id, "profile_id": user_id}))
+	return render_template("profile.html", active_page="messages", user=user[0], is_match=is_match)
+
+
+@app.post("/profile/<int:user_id>/message")
+@login_required
+def send_profile_message(user_id):
+	viewer_id = current_user_id()
+	if not rows("""
+		SELECT id FROM matches
+		WHERE status = 'matched'
+		AND ((sender_id = :viewer_id AND receiver_id = :profile_id)
+		OR (sender_id = :profile_id AND receiver_id = :viewer_id))
+	""", {"viewer_id": viewer_id, "profile_id": user_id}):
+		return render_template("error.html", error_code=403, error_title="Match required", error_message="You can only message users after matching."), 403
+
+	body = request.form.get("body", "").strip()
+	if not body:
+		return redirect(url_for("profile", user_id=user_id))
+
+	conversation = rows("""
+		SELECT id FROM conversations
+		WHERE (sender_id = :viewer_id AND receiver_id = :profile_id)
+		OR (sender_id = :profile_id AND receiver_id = :viewer_id)
+		ORDER BY id LIMIT 1
+	""", {"viewer_id": viewer_id, "profile_id": user_id})
+	if conversation:
+		conversation_id = conversation[0]["id"]
+	else:
+		contact = rows("SELECT name, image_url FROM users WHERE id = :user_id", {"user_id": user_id})[0]
+		inserted = db.session.execute(text("""
+			INSERT INTO conversations (sender_id, receiver_id, name, image_url, last_message, last_message_time, unread, is_online)
+			VALUES (:sender_id, :receiver_id, :name, :image_url, :last_message, :last_message_time, 0, 0)
+		"""), {"sender_id": viewer_id, "receiver_id": user_id, "name": contact["name"], "image_url": contact["image_url"], "last_message": body, "last_message_time": "now"})
+		conversation_id = inserted.lastrowid
+
+	db.session.execute(text("""
+			INSERT INTO messages (conversation_id, sender_id, receiver_id, sender, body, sent_at)
+			VALUES (:conversation_id, :sender_id, :receiver_id, :sender, :body, CURRENT_TIMESTAMP)
+	"""), {"conversation_id": conversation_id, "sender_id": viewer_id, "receiver_id": user_id, "sender": "me", "body": body})
+	db.session.execute(text("UPDATE conversations SET last_message = :body, last_message_time = CURRENT_TIMESTAMP WHERE id = :conversation_id"), {"body": body, "conversation_id": conversation_id})
+	db.session.commit()
+	# FIX: was `redirect(url_for("messages"))`, which lost the conversation
+	# context and (combined with the bug above) hid the message just sent.
+	return redirect(url_for("messages", conversation_id=conversation_id))
+
+
+@app.get("/account")
+@login_required
+def account():
+	user_id = current_user_id()
+	user = rows("""
+		SELECT name, profile_handle, image_url AS image, kisses, slaps,
+		COALESCE(ROUND((CAST(kisses AS REAL) / NULLIF(kisses + slaps, 0)) * 100), 0) AS score
+		FROM users WHERE id = :user_id
+	""", {"user_id": user_id})[0]
+	settings = rows("SELECT title, description, action FROM account_settings ORDER BY id")
+	return render_template(
+		"account.html",
+		active_page="account",
+		profile_name=user["name"],
+		profile_handle=user["profile_handle"],
+		profile_image=user["image"],
+		kisses=user["kisses"],
+		slaps=user["slaps"],
+		score=f"{int(user['score'])}%",
+		settings=settings,
+	)
+
+
+@app.get("/logout")
+def logout():
+	session.clear()
+	return redirect(url_for("login"))
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+	if request.method == "POST":
+		email = request.form.get("email", "").strip().lower()
+		password = request.form.get("password", "")
+		user = rows("SELECT id, password_hash FROM users WHERE email = :email", {"email": email})
+		if not user or not user[0]["password_hash"] or not check_password_hash(user[0]["password_hash"], password):
+			return render_template("login.html", error="Email or password is incorrect."), 401
+		session.clear()
+		session["user_id"] = user[0]["id"]
+		next_url = request.args.get("next") or url_for("home")
+		return redirect(next_url if next_url.startswith("/") else url_for("home"))
+	return render_template("login.html")
+
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+	if request.method == "POST":
+		name = request.form.get("name", "").strip()
+		email = request.form.get("email", "").strip().lower()
+		password = request.form.get("password", "")
+		try:
+			age = int(request.form.get("age", "0"))
+		except ValueError:
+			age = 0
+		if not name or not email or len(password) < 8 or not 18 <= age <= 99:
+			return render_template("register.html", error="Complete all fields. Password must contain at least 8 characters."), 400
+		if rows("SELECT id FROM users WHERE email = :email", {"email": email}):
+			return render_template("register.html", error="This email is already registered."), 409
+		image = request.files.get("image")
+		filename = secure_filename(image.filename) if image else ""
+		extension = Path(filename).suffix.lower().lstrip(".")
+		if not image or not filename or extension not in ALLOWED_IMAGE_EXTENSIONS:
+			return render_template("register.html", error="Please choose a valid image file."), 400
+
+		stored_name = f"{uuid4().hex}.{extension}"
+		image.save(UPLOAD_FOLDER / stored_name)
+		inserted = db.session.execute(text("""
+			INSERT INTO users (name, age, location, image_url, email, password_hash, profile_handle)
+			VALUES (:name, :age, :location, :image_url, :email, :password_hash, :profile_handle)
+		"""), {
+			"name": name,
+			"age": age,
+			"location": request.form["city"].strip(),
+			"image_url": f"uploads/{stored_name}",
+			"email": email,
+			"password_hash": generate_password_hash(password),
+			"profile_handle": f"@{secure_filename(name).lower()}",
+		})
+		db.session.commit()
+		session["user_id"] = inserted.lastrowid
+		return redirect(url_for("home"))
+	return render_template("register.html")
+
+
+@app.errorhandler(404)
+def page_not_found(error):
+	return render_template("error.html", error_code=404), 404
+
+
+if __name__ == "__main__":
+	app.run(debug=True)

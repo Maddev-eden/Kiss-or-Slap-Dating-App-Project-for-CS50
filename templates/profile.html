@@ -1,0 +1,45 @@
+{% extends "index.html" %}
+
+{% block title %}Kiss or Slap - {{ user.name }}{% endblock %}
+{% block page_class %}page-account page-profile{% endblock %}
+
+{% block content %}
+  <div class="content-wrapper">
+    <a class="profile-back-link" href="{{ url_for('messages') }}"><i class="fa-solid fa-arrow-left"></i> Back to messages</a>
+
+    <section class="profile-card">
+      <div class="profile-hero">
+        <img class="profile-avatar" src="{{ media_url(user.image) }}" alt="{{ user.name }} profile">
+        <div>
+          <h2>{{ user.name }}, {{ user.age }}</h2>
+          <p>{{ user.profile_handle }} · {{ user.location }}</p>
+        </div>
+      </div>
+
+      <div class="profile-stats">
+        <div><strong>{{ user.kisses }}</strong><span>Kisses</span></div>
+        <div><strong>{{ user.slaps }}</strong><span>Slaps</span></div>
+        <div><strong>{{ user.elo }}</strong><span>Elo</span></div>
+        <div><strong>{{ user.bucket }}</strong><span>Bucket</span></div>
+      </div>
+
+      <div class="profile-details">
+        <div><span>Location</span><strong>{{ user.location }}</strong></div>
+        <div><span>Age</span><strong>{{ user.age }}</strong></div>
+        <div><span>Profile handle</span><strong>{{ user.profile_handle }}</strong></div>
+      </div>
+
+      {% if is_match %}
+        <form class="profile-message-form" method="post" action="{{ url_for('send_profile_message', user_id=user.id) }}">
+          <label for="profile-message">Send a message</label>
+          <div class="profile-message-row">
+            <input id="profile-message" name="body" type="text" placeholder="Write a message..." required>
+            <button class="btn-send" type="submit"><i class="fa-solid fa-paper-plane"></i><span>Send</span></button>
+          </div>
+        </form>
+      {% else %}
+        <p class="profile-match-notice"><i class="fa-solid fa-lock"></i> You can send a message after matching.</p>
+      {% endif %}
+    </section>
+  </div>
+{% endblock %}

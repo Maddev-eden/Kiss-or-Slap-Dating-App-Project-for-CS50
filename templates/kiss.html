@@ -1,0 +1,64 @@
+{% extends "index.html" %}
+
+{% block title %}Kiss or Slap - Incoming Kisses{% endblock %}
+{% block page_class %}page-app page-kisses{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+  <div class="page-header">
+    <h2>They Kissed You! 💋</h2>
+    <p class="header-subtitle">Kiss them back to create an instant match.</p>
+  </div>
+
+  {% set kiss_list = kisses|default([]) %}
+
+  <div class="kisses-grid">
+    {% for user in kiss_list %}
+      {% set image_url = media_url(user.image) %}
+      <article class="user-card kiss-card" data-user-id="{{ user.id }}">
+        <div class="card-image-wrapper">
+          <img class="card-image" src="{{ image_url }}" alt="{{ user.name }}">
+          
+          <div class="scores-header">
+            <span class="score-badge">
+              <i class="fa-solid fa-kiss-wink-heart"></i>
+              {{ user.kisses|default(0) }}
+            </span>
+            <span class="score-badge">
+              <i class="fa-solid fa-hand-back-fist"></i>
+              {{ user.slaps|default(0) }}
+            </span>
+          </div>
+
+          <div class="card-user-info">
+            <h3>
+              <a href="{{ url_for('profile', user_id=user.id) }}" class="match-profile-link">
+                {{ user.name }}{% if user.age %}, {{ user.age }}{% endif %}
+              </a>
+            </h3>
+            <p>{{ user.location|default('') }}</p>
+          </div>
+        </div>
+        
+        <form class="card-actions" method="POST" action="{{ url_for('match_action', user_id=user.id) }}">
+          <button class="btn-action btn-kiss" type="submit" name="action" value="match">
+            <i class="fa-solid fa-heart"></i>
+            Smash!
+          </button>
+          <button class="btn-action btn-slap" type="submit" name="action" value="reject">
+            <i class="fa-solid fa-xmark"></i>
+            Pass
+          </button>
+        </form>
+      </article>
+    {% else %}
+      <div class="empty-state-card">
+        <div class="empty-icon"><i class="fa-solid fa-kiss-wink-heart"></i></div>
+        <h3>No Kisses Yet</h3>
+        <p>Use Boosts to get featured and receive more Kisses!</p>
+        <a href="{{ url_for('boost') }}" class="btn-action btn-kiss">Get a Boost</a>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
