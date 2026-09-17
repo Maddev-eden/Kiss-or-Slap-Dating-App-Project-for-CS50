@@ -6,6 +6,11 @@
 #### Description:
 
 **Kiss or Slap** is an interactive web-based matchmaking and ranking application built with **Flask** and **SQLite**. It combines classic dating app mechanics with gamification elements such as Elo ratings, virtual currencies, and a boost shop.
+<img width="1920" height="1140" alt="Screenshot 2026-09-11 093113" src="https://github.com/user-attachments/assets/34fb7f97-24b0-4eba-8b26-0ed9686ffc8a" />
+<img width="1920" height="1140" alt="Screenshot 2026-09-11 093136" src="https://github.com/user-attachments/assets/fd97b5e9-3b1e-4785-a3ea-9762ab88e02c" />
+<img width="1920" height="1140" alt="Screenshot 2026-09-11 093139" src="https://github.com/user-attachments/assets/648f4641-9f03-4740-b608-992693da9e5e" />
+<img width="1920" height="1140" alt="Screenshot 2026-09-11 093142" src="https://github.com/user-attachments/assets/6658d2a2-02b2-4836-8dd8-f52935509d2b" />
+<img width="1920" height="1140" alt="Screenshot 2026-09-11 093145" src="https://github.com/user-attachments/assets/a88b940f-d227-44c7-97e5-b308b3cdaacc" />
 
 ---
 
